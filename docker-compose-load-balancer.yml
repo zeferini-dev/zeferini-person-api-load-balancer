@@ -1,0 +1,62 @@
+# ============================================
+# LOAD BALANCER CONFIGURATION
+# Nginx Load Balancer for Backend APIs
+# ============================================
+# This docker-compose file ONLY creates the load balancer
+# that distributes traffic between:
+# - zeferini-person-api-nestjs (port 3000)
+# - zeferini-person-api-dotnet (port 3002)
+#
+# IMPORTANT: This file depends on:
+# 1. docker-compose-back.yml (for nestjs-app, dotnet-app)
+# 2. docker-compose-infra.yml (for infrastructure services)
+# Both must be running in the same Docker network.
+#
+# Startup sequence:
+# 1. cd zeferini-teste-full-infra
+# 2. docker compose -f docker-compose-infra.yml up -d
+# 3. docker compose -f docker-compose-back.yml -p zeferini-person-backend up -d --build
+# 4. cd ../zeferini-person-api-load-balancer
+# 5. docker compose -f docker-compose-load-balancer.yml up -d --build
+#
+# Services MUST be named consistently:
+# - nestjs-app (from docker-compose-back.yml)
+# - dotnet-app (from docker-compose-back.yml)
+#
+# Access:
+# - Load Balancer: http://localhost:8084
+# - Health Check: http://localhost:8084/health
+# - Nginx Status: http://localhost:8084/nginx_status
+# ============================================
+
+services:
+  load-balancer:
+    build: .
+    container_name: api-load-balancer
+    ports:
+      - "127.0.0.1:${LB_PORT:-8084}:80"
+    networks:
+      - zeferini-backend-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    environment:
+      - TZ=America/Sao_Paulo
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  # External network created by docker-compose-back.yml
+  # Must match the backend-network from docker-compose-back.yml
+  zeferini-backend-network:
+    name: zeferini-person-backend_backend-network
+    external: true
